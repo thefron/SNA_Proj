@@ -4,5 +4,36 @@
 	"Packages": [
 		"./cmd/..."
 	],
-	"Deps": []
+	"Deps": [
+		{
+			"ImportPath": "github.com/fhs/go-netrc/netrc",
+			"Rev": "4422b68c9c934b03e8e53ef18c8c8714542def7e"
+		},
+		{
+			"ImportPath": "github.com/jingweno/go-sawyer",
+			"Rev": "1999ae5763d678f3ce1112cf1fda7c7e9cf2aadf"
+		},
+		{
+			"ImportPath": "github.com/jingweno/go-sawyer/hypermedia",
+			"Rev": "1999ae5763d678f3ce1112cf1fda7c7e9cf2aadf"
+		},
+		{
+			"ImportPath": "github.com/jingweno/go-sawyer/mediaheader",
+			"Rev": "1999ae5763d678f3ce1112cf1fda7c7e9cf2aadf"
+		},
+		{
+			"ImportPath": "github.com/jingweno/go-sawyer/mediatype",
+			"Rev": "1999ae5763d678f3ce1112cf1fda7c7e9cf2aadf"
+		},
+		{
+			"ImportPath": "github.com/jtacoma/uritemplates",
+			"Comment": "0.1-16-g802b8e2",
+			"Rev": "802b8e24dbf0f556badb3a1401a49f6bfda80ca6"
+		},
+		{
+			"ImportPath": "github.com/octokit/go-octokit/octokit",
+			"Comment": "v0.4.0-364-g812e91d",
+			"Rev": "812e91dfbd64051c1ec72c48feda0278727e8a4e"
+		}
+	]
 }
