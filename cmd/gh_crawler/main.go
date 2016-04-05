@@ -19,16 +19,25 @@ func main() {
 		client = octokit.NewClient(nil)
 	}
 
-	url, err := octokit.UserURL.Expand(octokit.M{"user": "thefron"})
-
-	if err != nil {
-		fmt.Println("Error has occurred: ", err)
-	}
-
-	user, result := client.Users(url).One()
-	if result.HasError() {
-		// Handle error
-	}
-
+	userchan := GetUser(*client, "thefron")
+	user := <-userchan
 	fmt.Println(user.ReposURL)
+}
+
+func GetUser(client octokit.Client, username string) <-chan octokit.User {
+	out := make(chan octokit.User)
+	go func() {
+		url, err := octokit.UserURL.Expand(octokit.M{"user": username})
+		if err != nil {
+			fmt.Println("Error has occurred with {}: ", username, err)
+		}
+
+		user, result := client.Users(url).One()
+		if result.HasError() {
+			// TODO: Handle error
+		}
+		out <- *user
+		close(out)
+	}()
+	return out
 }
