@@ -1,13 +1,23 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/octokit/go-octokit/octokit"
 )
 
 func main() {
-	client := octokit.NewClient(nil)
+	token := flag.String("token", "", "github access token")
+	flag.Parse()
+	var client *octokit.Client
+	if *token != "" {
+		fmt.Println("Crawling with token:", *token)
+		client = octokit.NewClient(octokit.TokenAuth{AccessToken: *token})
+	} else {
+		fmt.Println("Crawling without token")
+		client = octokit.NewClient(nil)
+	}
 
 	url, err := octokit.UserURL.Expand(octokit.M{"user": "thefron"})
 
