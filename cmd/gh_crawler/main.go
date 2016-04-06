@@ -25,20 +25,24 @@ func main() {
 	for {
 		target := savedUser.Next()
 		if target == nil {
-			break
+			continue
 		}
 
 		userchan := GetUser(*client, *target)
 		user := <-userchan
 		fmt.Println(user.Login)
-		followers := GetFollowers(*client, user)
-		for follower := range followers {
-			savedUser.Enqueue(follower)
-		}
-		followings := GetFollowings(*client, user)
-		for following := range followings {
-			savedUser.Enqueue(following)
-		}
+		go func(client *octokit.Client, user octokit.User) {
+			followers := GetFollowers(*client, user)
+			for follower := range followers {
+				savedUser.Enqueue(follower)
+			}
+		}(client, user)
+		go func(client *octokit.Client, user octokit.User) {
+			followings := GetFollowings(*client, user)
+			for following := range followings {
+				savedUser.Enqueue(following)
+			}
+		}(client, user)
 	}
 }
 
