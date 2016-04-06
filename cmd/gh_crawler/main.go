@@ -19,9 +19,27 @@ func main() {
 		client = octokit.NewClient(nil)
 	}
 
-	userchan := GetUser(*client, "thefron")
-	user := <-userchan
-	fmt.Println(user.ReposURL)
+	savedUser := NewSaved()
+	savedUser.Enqueue("thefron")
+
+	for {
+		target := savedUser.Next()
+		if target == nil {
+			break
+		}
+
+		userchan := GetUser(*client, *target)
+		user := <-userchan
+		fmt.Println(user.Login)
+		followers := GetFollowers(*client, user)
+		for follower := range followers {
+			savedUser.Enqueue(follower)
+		}
+		followings := GetFollowings(*client, user)
+		for following := range followings {
+			savedUser.Enqueue(following)
+		}
+	}
 }
 
 func GetUser(client octokit.Client, username string) <-chan octokit.User {
