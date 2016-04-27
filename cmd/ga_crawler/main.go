@@ -3,6 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path"
 	"time"
 )
 
@@ -34,6 +38,69 @@ func jsonFileName(baseName string) string {
 func gzipFileName(baseName string) string {
 	jsonName := jsonFileName(baseName)
 	return fmt.Sprintf("%s.gz", jsonName)
+}
+
+func getUrl(baseName string) (url string, err error) {
+	gzName := gzipFileName(baseName)
+	if err != nil {
+		return url, err
+	}
+	return fmt.Sprintf("http://data.githubarchive.org/%s", gzName), nil
+}
+
+func download(dirPath string, baseName string) error {
+	url, err := getUrl(baseName)
+	if err != nil {
+		return err
+	}
+
+	path := path.Join(dirPath, gzipFileName(baseName))
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	get, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer get.Body.Close()
+
+	_, err = io.Copy(file, get.Body)
+	return err
+}
+
+func unzip(dirPath string, baseName string) error {
+	gzipName := gzipFileName(baseName)
+	jsonName := jsonFileName(baseName)
+	gzipPath := path.Join(dirPath, gzipName)
+	jsonPath := path.Join(dirPath, jsonName)
+
+	gzipFile, err := os.Open(gzipPath)
+	if err != nil {
+		return err
+	}
+	defer gzipFile.Close()
+
+	jsonWriter, err := os.Create(jsonPath)
+	if err != nil {
+		return err
+	}
+	defer jsonWriter.Close()
+
+	gzipReader, err := gzip.NewReader(gzipFile)
+	if err != nil {
+		return err
+	}
+	defer gzipReader.Close()
+
+	_, err = io.Copy(jsonWriter, gzipReader)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
