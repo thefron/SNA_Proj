@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -122,4 +124,19 @@ type Event struct {
 	Repo      Repo      `json:"repo"`
 	CreatedAt time.Time `json:"created_at"`
 	Org       *User     `json:"org"`
+}
+
+func readLine(scanner *bufio.Scanner) (*Event, error) {
+	if !scanner.Scan() {
+		return nil, scanner.Err()
+	}
+
+	line := scanner.Bytes()
+
+	event := Event{}
+	if err := json.Unmarshal(line, &event); err != nil {
+		return nil, err
+	}
+
+	return &event, nil
 }
