@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func baseName(year int, month int, day int, hour int) (name string, err error) {
+func baseName(year int, month time.Month, day int, hour int) (name string, err error) {
 	name = fmt.Sprintf("%d-%02d-%02d-%d", year, month, day, hour)
 	layout := "2006-01-02-15"
 	check, err := time.Parse(layout, name)
