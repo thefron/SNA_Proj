@@ -13,6 +13,7 @@ func readLines(filename string, c chan<- *Event) error {
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 1024), bufio.MaxScanTokenSize*10)
 
 	for {
 		event, err := readLine(scanner)
