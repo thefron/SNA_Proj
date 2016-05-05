@@ -5,12 +5,12 @@ import (
 )
 
 type User struct {
-	Id    uint64 `json:"id"`
+	Id    int    `json:"id"`
 	Login string `json:"login"`
 }
 
 type Repo struct {
-	Id   uint64 `json:"id"`
+	Id   int    `json:"id"`
 	Name string `json:"name"`
 }
 
