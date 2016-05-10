@@ -71,9 +71,13 @@ func main() {
 		done <- true
 	}(outputFile, out)
 
-	err = work(in, out, token)
-	if err != nil {
-		panic(err)
+	for i := 0; i < numberOfJobs; i += 1 {
+		go func(in <-chan Org, out chan<- OrgWithMembers, token string) {
+			err = work(in, out, token)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}(in, out, token)
 	}
 	<-done
 }
