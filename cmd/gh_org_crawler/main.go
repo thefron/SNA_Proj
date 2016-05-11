@@ -31,16 +31,27 @@ func main() {
 	var inputFileName string
 	var outputFileName string
 	var numberOfJobs int
-	var token string
+	var tokenFileName string
 	flag.StringVar(&inputFileName, "input", "input.txt", "input file name")
 	flag.StringVar(&outputFileName, "output", "output.txt", "output file name")
 	flag.IntVar(&numberOfJobs, "jobs", 4, "number of jobs")
-	flag.StringVar(&token, "token", "", "github token")
+	flag.StringVar(&tokenFileName, "token", "", "file storing github token")
 	flag.Parse()
 	fmt.Println("Start with input:", inputFileName)
 	fmt.Println("           output:", outputFileName)
 	fmt.Println("           jobs:", numberOfJobs)
-	fmt.Println("           token:", token)
+	fmt.Println("           token:", tokenFileName)
+
+	tokenFile, err := os.Open(tokenFileName)
+	if err != nil {
+		panic(err)
+	}
+	defer tokenFile.Close()
+	scanner := bufio.NewScanner(tokenFile)
+	if !scanner.Scan() {
+		panic(scanner.Err())
+	}
+	token := scanner.Text()
 
 	inputFile, err := os.Open(inputFileName)
 	if err != nil {
