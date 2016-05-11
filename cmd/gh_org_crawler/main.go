@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 )
 
 type Org struct {
@@ -92,7 +94,22 @@ func getIdsPage(orgName string, token string, page int) (*[]int, error) {
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("token %s", token))
 
-	resp, err := client.Do(req)
+	var resp *http.Response
+	for {
+		resp, err = client.Do(req)
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		after := time.Duration(50 * time.Minute)
+		resetTime, err := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 64)
+		if err == nil {
+			after = time.Unix(resetTime, 0).Sub(time.Now())
+		}
+		fmt.Printf("Status = %d\n", resp.StatusCode)
+		fmt.Println("Header", resp.Header)
+		fmt.Println("Wait ", after)
+		<-time.After(after)
+	}
 	if err != nil {
 		return nil, err
 	}
