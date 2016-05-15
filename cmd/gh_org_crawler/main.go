@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -72,6 +73,7 @@ func main() {
 	for i := 0; i < numberOfTokens; i += 1 {
 		go func(in <-chan Org, out chan<- OrgWithMembers, token string, index int) {
 			fmt.Printf("%d-th worker with %s\n", index, token)
+			<-time.After(time.Duration(30*i) * time.Second)
 			err = work(in, out, token)
 			if err != nil {
 				fmt.Println(err)
@@ -103,7 +105,7 @@ func readTokens(fileName string) ([]string, error) {
 	}
 }
 
-func getIdsPage(orgName string, token string, page int) (*[]int, error) {
+func getIdsPage(orgName string, token string, page int, r *rand.Rand) (*[]int, error) {
 	url := fmt.Sprintf("https://api.github.com/orgs/%s/public_members?page=%d", orgName, page)
 	client := &http.Client{}
 
@@ -127,7 +129,7 @@ func getIdsPage(orgName string, token string, page int) (*[]int, error) {
 		fmt.Printf("Status = %d\n", resp.StatusCode)
 		fmt.Println("Header", resp.Header)
 		fmt.Println("Wait ", after)
-		<-time.After(after)
+		<-time.After(after + time.Duration(r.Intn(180))*time.Second)
 	}
 	if err != nil {
 		return nil, err
@@ -148,11 +150,11 @@ func getIdsPage(orgName string, token string, page int) (*[]int, error) {
 	return &memberIds, nil
 }
 
-func getIds(orgName string, token string) (*[]int, error) {
+func getIds(orgName string, token string, r *rand.Rand) (*[]int, error) {
 	page := 1
 	result := make([]int, 0)
 	for {
-		ids, err := getIdsPage(orgName, token, page)
+		ids, err := getIdsPage(orgName, token, page, r)
 		if err != nil {
 			return nil, err
 		}
@@ -166,9 +168,10 @@ func getIds(orgName string, token string) (*[]int, error) {
 }
 
 func work(in <-chan Org, out chan<- OrgWithMembers, token string) error {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	defer close(out)
 	for org := range in {
-		ids, err := getIds(org.Name, token)
+		ids, err := getIds(org.Name, token, r)
 		if err != nil {
 			return err
 		}
