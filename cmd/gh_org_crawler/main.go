@@ -67,7 +67,6 @@ func main() {
 	in := make(chan Org, numberOfJobs)
 	out := make(chan OrgWithMembers)
 
-	done := make(chan bool)
 	go func(inputFile *os.File, in chan<- Org) {
 		defer close(in)
 		err := readLines(inputFile, in)
@@ -76,13 +75,6 @@ func main() {
 			return
 		}
 	}(inputFile, in)
-	go func(outputFile *os.File, out <-chan OrgWithMembers) {
-		err := writeLines(outputFile, out)
-		if err != nil {
-			fmt.Println(err)
-		}
-		done <- true
-	}(outputFile, out)
 
 	for i := 0; i < numberOfJobs; i += 1 {
 		go func(in <-chan Org, out chan<- OrgWithMembers, token string) {
@@ -92,7 +84,11 @@ func main() {
 			}
 		}(in, out, token)
 	}
-	<-done
+
+	err = writeLines(outputFile, out)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func getIdsPage(orgName string, token string, page int) (*[]int, error) {
