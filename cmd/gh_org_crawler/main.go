@@ -30,28 +30,21 @@ type User struct {
 func main() {
 	var inputFileName string
 	var outputFileName string
-	var numberOfJobs int
 	var tokenFileName string
 	flag.StringVar(&inputFileName, "input", "input.txt", "input file name")
 	flag.StringVar(&outputFileName, "output", "output.txt", "output file name")
-	flag.IntVar(&numberOfJobs, "jobs", 4, "number of jobs")
-	flag.StringVar(&tokenFileName, "token", "", "file storing github token")
+	flag.StringVar(&tokenFileName, "token", "tokens.txt", "file storing github token")
 	flag.Parse()
 	fmt.Println("Start with input:", inputFileName)
 	fmt.Println("           output:", outputFileName)
-	fmt.Println("           jobs:", numberOfJobs)
 	fmt.Println("           token:", tokenFileName)
 
-	tokenFile, err := os.Open(tokenFileName)
+	tokens, err := readTokens(tokenFileName)
 	if err != nil {
 		panic(err)
 	}
-	defer tokenFile.Close()
-	scanner := bufio.NewScanner(tokenFile)
-	if !scanner.Scan() {
-		panic(scanner.Err())
-	}
-	token := scanner.Text()
+	numberOfTokens := len(tokens)
+	fmt.Println("           number of tokens:", numberOfTokens)
 
 	inputFile, err := os.Open(inputFileName)
 	if err != nil {
@@ -64,7 +57,7 @@ func main() {
 	}
 	defer outputFile.Close()
 
-	in := make(chan Org, numberOfJobs)
+	in := make(chan Org)
 	out := make(chan OrgWithMembers)
 
 	go func(inputFile *os.File, in chan<- Org) {
@@ -76,18 +69,37 @@ func main() {
 		}
 	}(inputFile, in)
 
-	for i := 0; i < numberOfJobs; i += 1 {
-		go func(in <-chan Org, out chan<- OrgWithMembers, token string) {
+	for i := 0; i < numberOfTokens; i += 1 {
+		go func(in <-chan Org, out chan<- OrgWithMembers, token string, index int) {
+			fmt.Printf("%d-th worker with %s\n", index, token)
 			err = work(in, out, token)
 			if err != nil {
 				fmt.Println(err)
 			}
-		}(in, out, token)
+		}(in, out, (tokens)[i], i)
 	}
 
 	err = writeLines(outputFile, out)
 	if err != nil {
 		fmt.Println(err)
+	}
+}
+
+func readTokens(fileName string) ([]string, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	tokens := make([]string, 0)
+	for {
+		if !scanner.Scan() {
+			return tokens, scanner.Err()
+		}
+		token := scanner.Text()
+		tokens = append(tokens, token)
 	}
 }
 
