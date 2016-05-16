@@ -118,6 +118,10 @@ func getIdsPage(orgName string, token string, page int, r *rand.Rand) (*[]int, e
 	var resp *http.Response
 	for {
 		resp, err = client.Do(req)
+		if resp.StatusCode == http.StatusNotFound {
+			result := make([]int, 0)
+			return &result, nil
+		}
 		if resp.StatusCode == http.StatusOK {
 			break
 		}
