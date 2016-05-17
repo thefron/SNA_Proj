@@ -151,6 +151,7 @@ func writeResult(channel <-chan *RepoInfo, languageFileName string, forksFileNam
 			for _, id := range idList {
 				buffer.WriteString(fmt.Sprintf(" %d", id))
 			}
+			buffer.WriteString("\n")
 			_, err := buffer.WriteTo(outputFile)
 			if err != nil {
 				log.Println(err)
@@ -232,6 +233,9 @@ func parseRepoLine(scanner *bufio.Scanner) (*Repo, error) {
 
 func needRetry(result *octokit.Result) bool {
 	if !result.HasError() {
+		return false
+	}
+	if result.Response == nil {
 		return false
 	}
 	if result.RateLimitRemaining() == 0 {
@@ -320,6 +324,11 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 				continue
 			}
 			break
+		}
+
+		if generalRepoInfo == nil {
+			fmt.Println("repository not found", repo.Name)
+			continue
 		}
 
 		var url *url.URL
