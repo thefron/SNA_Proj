@@ -73,7 +73,7 @@ func main() {
 	for i := 0; i < numberOfTokens; i += 1 {
 		go func(in <-chan Org, out chan<- OrgWithMembers, token string, index int) {
 			fmt.Printf("%d-th worker with %s\n", index, token)
-			<-time.After(time.Duration(30*i) * time.Second)
+			<-time.After(time.Duration(10*index) * time.Second)
 			err = work(in, out, token)
 			if err != nil {
 				fmt.Println(err)
