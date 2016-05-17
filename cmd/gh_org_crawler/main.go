@@ -109,15 +109,20 @@ func getIdsPage(orgName string, token string, page int, r *rand.Rand) (*[]int, e
 	url := fmt.Sprintf("https://api.github.com/orgs/%s/public_members?page=%d", orgName, page)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Authorization", fmt.Sprintf("token %s", token))
-
 	var resp *http.Response
 	for {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Add("Authorization", fmt.Sprintf("token %s", token))
+
 		resp, err = client.Do(req)
+		if err != nil {
+			fmt.Println("Cannot send request", err)
+			continue
+		}
+		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusNotFound {
 			result := make([]int, 0)
 			return &result, nil
@@ -135,10 +140,6 @@ func getIdsPage(orgName string, token string, page int, r *rand.Rand) (*[]int, e
 		fmt.Println("Wait ", after)
 		<-time.After(after + time.Duration(r.Intn(180))*time.Second)
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	members := make([]User, 0)
 	err = json.Unmarshal(body, &members)
