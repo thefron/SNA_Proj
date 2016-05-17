@@ -219,6 +219,7 @@ func writeLines(outputFile *os.File, c <-chan OrgWithMembers) error {
 		if err != nil {
 			return err
 		}
+		writer.Flush()
 	}
 	return nil
 }
