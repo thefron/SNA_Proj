@@ -68,12 +68,14 @@ func main() {
 	var forksFileName string
 	var stargazersFileName string
 	var subscribersFileName string
+	var progressFileName string
 	flag.StringVar(&inputFileName, "input", "input-repo.txt", "input file (repository) name")
 	flag.StringVar(&tokenFileName, "token", "tokens.txt", "files storing github tokens")
 	flag.StringVar(&languageFileName, "language", "language.txt", "output language file")
 	flag.StringVar(&forksFileName, "forks", "forks.txt", "output forks file")
 	flag.StringVar(&stargazersFileName, "stargazers", "stargazers.txt", "output stargazers file")
 	flag.StringVar(&subscribersFileName, "subscribers", "subscribers.txt", "output subscribers file")
+	flag.StringVar(&progressFileName, "progress", "progress.txt", "saving current progress")
 	flag.Parse()
 	fmt.Println("repository crawler")
 	fmt.Println("input file:", inputFileName)
@@ -82,6 +84,7 @@ func main() {
 	fmt.Println("forks output:", forksFileName)
 	fmt.Println("stargazers output:", stargazersFileName)
 	fmt.Println("subscribers output:", subscribersFileName)
+	fmt.Println("progress file:", progressFileName)
 
 	tokens, err := readTokens(tokenFileName)
 	if err != nil {
@@ -93,12 +96,17 @@ func main() {
 
 	readerCh := make(chan *Repo)
 	writerCh := make(chan *RepoInfo)
+	progressCh := make(chan int)
+
+	doneSet := getProgress(progressFileName)
 
 	for i := 0; i < numberOfTokens; i++ {
-		go fetchRepositoryInfo(readerCh, writerCh, tokens[i])
+		go fetchRepositoryInfo(readerCh, writerCh, tokens[i], doneSet, progressCh)
 	}
 
 	go writeResult(writerCh, languageFileName, forksFileName, stargazersFileName, subscribersFileName)
+
+	go writeProgress(progressCh, progressFileName)
 
 	readRepoLines(readerCh, inputFileName)
 
@@ -106,26 +114,43 @@ func main() {
 	log.Println("Done")
 }
 
+func openAppend(filename string) (*os.File, error) {
+	return os.OpenFile(filename, os.O_RDWR | os.O_APPEND | os.O_CREATE, 0666)
+}
+
+func writeProgress(channel <-chan int, progressFileName string) {
+	progressFile, err := openAppend(progressFileName)
+	if err != nil {
+		panic(err)
+	}
+	defer progressFile.Close()
+
+	for id := range channel {
+		progressFile.WriteString(fmt.Sprintf("%d\n", id))
+	}
+	wg.Done()
+}
+
 func writeResult(channel <-chan *RepoInfo, languageFileName string, forksFileName string, stargazersFileName string, subscribersFileName string) {
-	languageFile, err := os.Create(languageFileName)
+	languageFile, err := openAppend(languageFileName)
 	if err != nil {
 		panic(err)
 	}
 	defer languageFile.Close()
 
-	forksFile, err := os.Create(forksFileName)
+	forksFile, err := openAppend(forksFileName)
 	if err != nil {
 		panic(err)
 	}
 	defer forksFile.Close()
 
-	stargazersFile, err := os.Create(stargazersFileName)
+	stargazersFile, err := openAppend(stargazersFileName)
 	if err != nil {
 		panic(err)
 	}
 	defer stargazersFile.Close()
 
-	subscribersFile, err := os.Create(subscribersFileName)
+	subscribersFile, err := openAppend(subscribersFileName)
 	if err != nil {
 		panic(err)
 	}
@@ -192,7 +217,7 @@ func readRepoLines(channel chan<- *Repo, inputFileName string) error {
 		channel <- repo
 	}
 
-	wg.Add(1)
+	wg.Add(2)
 
 	return nil
 }
@@ -245,7 +270,7 @@ func getRateLimitResetTime(response *http.Response) *time.Time {
 	return &t
 }
 
-func needRetry(result *octokit.Result) bool {
+func needRetry(result *octokit.Result, token string) bool {
 	if !result.HasError() {
 		return false
 	}
@@ -265,6 +290,11 @@ func needRetry(result *octokit.Result) bool {
 		}
 		return true
 	}
+	// unauthorized -> means bad token
+	if ok && rerr.Type == octokit.ErrorUnauthorized {
+		log.Println("bad token!", token)
+		panic(result)
+	}
 	if result.Response == nil {
 		return false
 	}
@@ -276,7 +306,7 @@ func fetchAllUserID(client *octokit.Client, url *url.URL) []int {
 	for {
 		fmt.Println("query start");
 		users, result := client.Users(url).All()
-		if needRetry(result) {
+		if needRetry(result, client.AuthMethod.String()) {
 			continue
 		}
 		if result.HasError() {
@@ -300,7 +330,7 @@ func fetchAllRepositoriesOwners(client *octokit.Client, link *octokit.Hyperlink,
 	for {
 		fmt.Println("query start");
 		repositories, result := client.Repositories().All(link, params)
-		if needRetry(result) {
+		if needRetry(result, client.AuthMethod.String()) {
 			continue
 		}
 		if result.HasError() {
@@ -320,8 +350,37 @@ func fetchAllRepositoriesOwners(client *octokit.Client, link *octokit.Hyperlink,
 }
 
 
+func getProgress(progressFileName string) map[int]bool {
+	doneSet := map[int]bool{}
+	progressFile, err := os.Open(progressFileName)
+	if err != nil {
+		return doneSet
+	}
+	defer progressFile.Close()
 
-func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenString string) {
+	scanner := bufio.NewScanner(progressFile)
+	scanner.Buffer(make([]byte, 1024), bufio.MaxScanTokenSize*10)
+	for {
+		if !scanner.Scan() {
+			break
+		}
+
+		line := scanner.Text()
+		id, err := strconv.Atoi(line)
+
+		if err != nil {
+			continue
+		}
+
+		doneSet[id] = true
+	}
+
+	log.Println("Found:", len(doneSet), "records")
+
+	return doneSet
+}
+
+func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenString string, done map[int]bool, progCh chan<- int) {
 	defer close(resultCh)
 
 	var (
@@ -336,6 +395,10 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 	client := octokit.NewClient(token)
 
 	for repo := range repoCh {
+		_, doneBefore := done[repo.ID]
+		if doneBefore {
+			continue
+		}
 		log.Println("processing ", repo.Name)
 		param := octokit.M{"owner": repo.Owner(), "repo": repo.Repo() }
 
@@ -345,7 +408,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 		for {
 			fmt.Println("query start");
 			generalRepoInfo, result = client.Repositories().One(&repoURL, param)
-			if needRetry(result) {
+			if needRetry(result, client.AuthMethod.String()) {
 				continue
 			}
 			break
@@ -353,6 +416,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 
 		if generalRepoInfo == nil {
 			log.Println("repository not found", repo.Name)
+			progCh<- repo.ID
 			continue
 		}
 
@@ -383,6 +447,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 		repoInfo.Contributors = nil
 
 		resultCh <- repoInfo
+		progCh<- repo.ID
 	}
 }
 
