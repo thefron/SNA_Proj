@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"flag"
 	"net/url"
+	"net/http"
 	"bytes"
 	"github.com/octokit/go-octokit/octokit"
 )
@@ -231,20 +232,41 @@ func parseRepoLine(scanner *bufio.Scanner) (*Repo, error) {
 	}
 }
 
+func getRateLimitResetTime(response *http.Response) *time.Time {
+	epoc := response.Header.Get("X-RateLimit-Reset")
+	if epoc == "" {
+		return nil
+	}
+	reset, err := strconv.ParseInt(epoc, 10, 64)
+	if err != nil {
+		return nil
+	}
+	t := time.Unix(reset, 0)
+	return &t
+}
+
 func needRetry(result *octokit.Result) bool {
 	if !result.HasError() {
 		return false
 	}
+	rerr, ok := result.Err.(*octokit.ResponseError)
+	if ok && rerr.Type == octokit.ErrorTooManyRequests {
+		log.Println("rate limit reached")
+		resetTime := getRateLimitResetTime(rerr.Response)
+		if resetTime == nil {
+			log.Println("unknown reset time")
+			after := (5 * time.Minute)
+			log.Println("waiting", after)
+			<-time.After(after)
+		} else {
+			after := resetTime.Sub(time.Now()) + (10 * time.Second)
+			log.Println("waiting", after)
+			<-time.After(after)
+		}
+		return true
+	}
 	if result.Response == nil {
 		return false
-	}
-	if result.RateLimitRemaining() == 0 {
-		log.Println("rate limit reached")
-		resetTime := result.RateLimitReset()
-		after := resetTime.Sub(time.Now()) + (10 * time.Second)
-		log.Println("waiting", after)
-		<-time.After(after)
-		return true
 	}
 	return false
 }
@@ -252,6 +274,7 @@ func needRetry(result *octokit.Result) bool {
 func fetchAllUserID(client *octokit.Client, url *url.URL) []int {
 	var allID []int
 	for {
+		fmt.Println("query start");
 		users, result := client.Users(url).All()
 		if needRetry(result) {
 			continue
@@ -275,6 +298,7 @@ func fetchAllUserID(client *octokit.Client, url *url.URL) []int {
 func fetchAllRepositoriesOwners(client *octokit.Client, link *octokit.Hyperlink, params octokit.M) []int {
 	var allID []int
 	for {
+		fmt.Println("query start");
 		repositories, result := client.Repositories().All(link, params)
 		if needRetry(result) {
 			continue
@@ -303,7 +327,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 	var (
 		repoURL = octokit.Hyperlink("repos/{owner}/{repo}") /* repository */
 		forksURL = octokit.Hyperlink("repos/{owner}/{repo}/forks") /* repositories */
-		stargazersURL = octokit.Hyperlink("repos/{owner}/{repo}/stargazers") /* users */
+		//stargazersURL = octokit.Hyperlink("repos/{owner}/{repo}/stargazers") /* users */
 		subscribersURL = octokit.Hyperlink("repos/{owner}/{repo}/subscribers") /* users */
 		//contributorsURL = octokit.Hyperlink("repos/{owner}/{repo}/contributors") /* users */
 	)
@@ -312,13 +336,14 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 	client := octokit.NewClient(token)
 
 	for repo := range repoCh {
-		fmt.Println("processing ", repo.Name)
+		log.Println("processing ", repo.Name)
 		param := octokit.M{"owner": repo.Owner(), "repo": repo.Repo() }
 
 		var generalRepoInfo *octokit.Repository
 		var result *octokit.Result
 
 		for {
+			fmt.Println("query start");
 			generalRepoInfo, result = client.Repositories().One(&repoURL, param)
 			if needRetry(result) {
 				continue
@@ -327,18 +352,18 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 		}
 
 		if generalRepoInfo == nil {
-			fmt.Println("repository not found", repo.Name)
+			log.Println("repository not found", repo.Name)
 			continue
 		}
 
 		var url *url.URL
 		var err error
 
-		url, err = stargazersURL.Expand(param)
+		/*url, err = stargazersURL.Expand(param)
 		if err != nil {
 			panic(err)
 		}
-		stargazers := fetchAllUserID(client, url)
+		stargazers := fetchAllUserID(client, url) */
 
 		url, err = subscribersURL.Expand(param)
 		if err != nil {
@@ -353,7 +378,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 		repoInfo.Name = repo.Name
 		repoInfo.Language = generalRepoInfo.Language
 		repoInfo.Forkers = forkers
-		repoInfo.Stargazers = stargazers
+		repoInfo.Stargazers = nil //stargazers
 		repoInfo.Subscribers = subscribers
 		repoInfo.Contributors = nil
 
