@@ -277,6 +277,7 @@ func needRetry(result *octokit.Result, token string) bool {
 	rerr, ok := result.Err.(*octokit.ResponseError)
 	if ok && rerr.Type == octokit.ErrorTooManyRequests {
 		log.Println("rate limit reached")
+		log.Println(result, token)
 		resetTime := getRateLimitResetTime(rerr.Response)
 		if resetTime == nil {
 			log.Println("unknown reset time")
@@ -384,10 +385,10 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 	defer close(resultCh)
 
 	var (
-		repoURL = octokit.Hyperlink("repos/{owner}/{repo}") /* repository */
-		forksURL = octokit.Hyperlink("repos/{owner}/{repo}/forks") /* repositories */
+		repoURL = octokit.Hyperlink("repos/{owner}/{repo}?access_token={token}") /* repository */
+		forksURL = octokit.Hyperlink("repos/{owner}/{repo}/forks?access_token={token}") /* repositories */
 		//stargazersURL = octokit.Hyperlink("repos/{owner}/{repo}/stargazers") /* users */
-		subscribersURL = octokit.Hyperlink("repos/{owner}/{repo}/subscribers") /* users */
+		subscribersURL = octokit.Hyperlink("repos/{owner}/{repo}/subscribers?access_token={token}") /* users */
 		//contributorsURL = octokit.Hyperlink("repos/{owner}/{repo}/contributors") /* users */
 	)
 
@@ -400,7 +401,7 @@ func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenSt
 			continue
 		}
 		log.Println("processing ", repo.Name)
-		param := octokit.M{"owner": repo.Owner(), "repo": repo.Repo() }
+		param := octokit.M{"owner": repo.Owner(), "repo": repo.Repo(), "token": tokenString }
 
 		var generalRepoInfo *octokit.Repository
 		var result *octokit.Result
