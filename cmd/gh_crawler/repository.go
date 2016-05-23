@@ -272,6 +272,11 @@ func getRateLimitResetTime(response *http.Response) *time.Time {
 
 func needRetry(result *octokit.Result, token string) bool {
 	if !result.HasError() {
+		rate := result.RateLimitRemaining()
+		if rate < 500+360 {
+			after := 10 * time.Second
+			<-time.After(after)
+		}
 		return false
 	}
 	rerr, ok := result.Err.(*octokit.ResponseError)
