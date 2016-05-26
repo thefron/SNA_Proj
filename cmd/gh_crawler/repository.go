@@ -60,6 +60,7 @@ func readTokens(fileName string) ([]string, error) {
 }
 
 var wg sync.WaitGroup
+var wg_tokens sync.WaitGroup
 
 func main() {
 	var inputFileName string
@@ -101,6 +102,7 @@ func main() {
 	doneSet := getProgress(progressFileName)
 
 	for i := 0; i < numberOfTokens; i++ {
+		wg_tokens.Add(1)
 		go fetchRepositoryInfo(readerCh, writerCh, tokens[i], doneSet, progressCh)
 	}
 
@@ -110,6 +112,13 @@ func main() {
 
 	readRepoLines(readerCh, inputFileName)
 
+	/* works of fetchRepositories done */
+	wg_tokens.Wait()
+	/* close writing channels */
+	close(progressCh)
+	close(writerCh)
+
+	/* all writing tasks done */
 	wg.Wait()
 	log.Println("Done")
 }
@@ -387,7 +396,7 @@ func getProgress(progressFileName string) map[int]bool {
 }
 
 func fetchRepositoryInfo(repoCh <-chan *Repo, resultCh chan<- *RepoInfo, tokenString string, done map[int]bool, progCh chan<- int) {
-	defer close(resultCh)
+	defer wg_tokens.Done()
 
 	var (
 		repoURL = octokit.Hyperlink("repos/{owner}/{repo}?access_token={token}") /* repository */
