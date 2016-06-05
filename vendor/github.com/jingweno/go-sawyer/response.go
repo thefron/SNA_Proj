@@ -3,6 +3,7 @@ package sawyer
 import (
 	"errors"
 	"net/http"
+	"io/ioutil"
 
 	"github.com/jingweno/go-sawyer/mediaheader"
 	"github.com/jingweno/go-sawyer/mediatype"
@@ -54,6 +55,8 @@ func (r *Response) Decode(resource interface{}) error {
 	} else {
 		r.ResponseError = dec.Decode(resource)
 	}
+
+	ioutil.ReadAll(r.Body)
 	return r.ResponseError
 }
 
